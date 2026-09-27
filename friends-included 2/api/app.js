@@ -6,7 +6,7 @@ export default async function handler(req,res) {
     const url=new URL(req.url,'http://localhost');
     const action=url.searchParams.get('action')||'state';
     if (req.method==='GET' && action==='config') {
-      return json(res,200,{employees:EMPLOYEES,local,author:process.env.PUBLIC_AUTHOR_NAME||'Maksims Paņuškins',botUsername:process.env.PUBLIC_BOT_USERNAME||'',github:process.env.PUBLIC_GITHUB_URL||'',sheet:process.env.GOOGLE_SHEET_ID?`https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`:'',configured:local||Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY)});
+      return json(res,200,{employees:EMPLOYEES.filter(p=>!p.testOnly),local,author:process.env.PUBLIC_AUTHOR_NAME||'Maksims Paņuškins',botUsername:process.env.PUBLIC_BOT_USERNAME||'',github:process.env.PUBLIC_GITHUB_URL||'',sheet:process.env.GOOGLE_SHEET_ID?`https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`:'',configured:local||Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY)});
     }
     // Deliberate public fictional demonstration roles, as required by the brief.
     // This is not authentication for a real company's financial records.
@@ -14,8 +14,18 @@ export default async function handler(req,res) {
     if (req.method==='POST' && action==='retry' && secretMatches(req.headers.authorization,`Bearer ${process.env.RETRY_SECRET||''}`) && process.env.RETRY_SECRET) return json(res,200,await retry());
     requireRole(actor);
     if (req.method==='GET' && action==='state') return json(res,200,await service.state(actor));
+    if (req.method==='GET' && action==='testState') return json(res,200,await service.state('svetlana',{onlyTest:true}));
     if (req.method!=='POST') throw new AppError('Method not allowed.',405);
     const input=await body(req);
+    if (action==='testLink') {
+      await service.linkTest(input.userId,input.kind);
+      return json(res,200,{linked:true,employee:input.kind==='sale'?'Telegram Test Salesperson':'Telegram Test Expense Reporter'});
+    }
+    if (action==='testApprove') {
+      const record=await service.approveTest(input.reference,input);
+      let delivery; try { delivery=await retry(); } catch { delivery={pending:true}; }
+      return json(res,200,{saved:true,reference:record.reference,delivery});
+    }
     if (action==='submit' || action==='approve') {
       const record=action==='submit' ? await service.submit(actor,input) : await service.approve(actor,input.reference,input);
       // Failure after commit must never appear as a rejected financial operation.
