@@ -22,7 +22,7 @@ export async function handleTelegram(update, service, telegram, appUrl) {
   try {
     const input=parseCommand(message.text);
     if (['start','help','id'].includes(input.command)) {
-      await telegram.send(chat,`Friends Included finance\nYour Telegram user ID: ${user}\nAsk the manager to link this ID to an employee in Manager setup. You cannot choose a role here.\n\n/sale S01 | Olivia Rose | A | 1000 | One proud uncle and an emotional grandmother | 50 | 30 | 20\n\n/expense E01 | 120 | Materials | A | Rented suit and fake pearl necklace for the relatives\n\n/status — your recorded transactions\nWebsite: ${appUrl || 'Ask the manager for the website link.'}`); return;
+      await telegram.send(chat,`Friends Included finance\nYour Telegram user ID: ${user}\nOpen “Test this system” on the website to link this ID without a private key. Public linking is restricted to isolated fictional test data.\n\n/status — your recorded transactions\nWebsite: ${appUrl || 'Ask the manager for the website link.'}`); return;
     }
     const link=(await service.store.links()).find(l=>l.user_id===user);
     if (!link) throw new AppError(`Your Telegram account is not linked. Ask the manager to link user ID ${user}.`);

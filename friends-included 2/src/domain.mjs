@@ -3,10 +3,13 @@ export const EMPLOYEES = [
   { id: 'richard', name: 'Richard “Call Me Dick” Darling', role: 'salesperson' },
   { id: 'anastasia', name: 'Anastasia Ferrari', role: 'salesperson' },
   { id: 'jean-claude', name: 'Jean-Claude Bērziņš', role: 'salesperson' },
-  { id: 'kevin', name: 'Kevin von Whatever', role: 'reporter' }
+  { id: 'kevin', name: 'Kevin von Whatever', role: 'reporter' },
+  { id: 'test-richard', name: 'Telegram Test Salesperson', role: 'salesperson', testOnly: true },
+  { id: 'test-kevin', name: 'Telegram Test Expense Reporter', role: 'reporter', testOnly: true }
 ];
 export const SALESPEOPLE = ['richard', 'anastasia', 'jean-claude'];
 export const PROJECTS = { A: 'Respectable Relatives', B: 'Drunk University Friends', overhead: 'Company overhead' };
+export const isTestEmployee = id => EMPLOYEES.find(p => p.id === id)?.testOnly === true;
 export class AppError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 export function requireRole(id, role) {
   const person = EMPLOYEES.find(p => p.id === id);
@@ -53,7 +56,10 @@ export function submission(actor, input, origin = {}, now = new Date().toISOStri
   requireRole(actor, kind === 'sale' ? 'salesperson' : 'reporter');
   const reference = text(input.reference, 'Reference', 30).toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(reference)) throw new AppError('Reference may contain letters, digits, hyphens and underscores.');
-  const record = { reference, kind, employee: actor, submitted_at: now, description: text(input.description, 'Description'), amount_cents: amountCents(input.amount), source: origin.source || 'website', original_chat_id: origin.chatId || null, version: 1, approved_at: null, approved_by: null, earned: [0, 0, 0], pool: 0 };
+  const testMode = isTestEmployee(actor);
+  if (testMode && !reference.startsWith('TST-')) throw new AppError('Test references must start with TST-.');
+  if (!testMode && reference.startsWith('TST-')) throw new AppError('TST- references are reserved for the public test system.');
+  const record = { reference, kind, employee: actor, test_mode: testMode, submitted_at: now, description: text(input.description, 'Description'), amount_cents: amountCents(input.amount), source: origin.source || 'website', original_chat_id: origin.chatId || null, version: 1, approved_at: null, approved_by: null, earned: [0, 0, 0], pool: 0 };
   if (kind === 'sale') {
     if (!['A', 'B'].includes(input.project)) throw new AppError('Choose project A or B.');
     Object.assign(record, { customer: text(input.customer, 'Customer', 120), project: input.project, proposed_split: splitBasisPoints(input.split), approved_split: null, status: 'Pending approval' });
@@ -92,6 +98,7 @@ export function totals(records) {
   const project = () => ({ income: 0, commission: 0, expenses: 0, result: 0 });
   const out = { A: project(), B: project(), company: { ...project(), overhead: 0, awaiting: 0 }, earned: [0, 0, 0], pendingSales: 0, pendingCount: 0 };
   for (const r of records) {
+    if (r.test_mode) continue;
     if (r.kind === 'sale') {
       if (r.status !== 'Approved') { out.pendingSales += r.amount_cents; out.pendingCount++; continue; }
       out[r.project].income += r.amount_cents; out[r.project].commission += r.pool;

@@ -78,6 +78,7 @@ export async function deliver(store, sheets, telegram, { local=false }={}) {
   try {
     for (const row of (await store.pendingRows()).slice(0,2)) {
       if (Date.now()-started>18000) break;
+      if (row.data.test_mode) { await store.syncDone(row.reference,row.version,'Test data'); continue; }
       try { await sheets.sync(row); await store.syncDone(row.reference,row.version,'Synced'); synced++; }
       catch (error) { await store.syncDone(row.reference,row.version,'Sync failed',safeError(error)); failed++; }
     }
