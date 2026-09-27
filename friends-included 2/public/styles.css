@@ -42,6 +42,7 @@ button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18p
 button:active:not(:disabled) { transform: translateY(0); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #d6a328; outline-offset: 3px; }
 a { color: var(--blue); }
+.button-link { display: inline-block; background: linear-gradient(135deg, var(--navy), #244a69); color: white; padding: .76rem 1.08rem; border-radius: 9px; font-weight: 650; text-decoration: none; box-shadow: 0 5px 13px rgba(18,40,61,.12); }
 
 .topbar {
   position: sticky;
@@ -179,6 +180,10 @@ details p { max-width: 500px; margin: 9px 0; }
 .toolbar h2 { margin-right: auto; margin-bottom: 0; }
 .toolbar select { width: auto; margin: 0; font-size: .84rem; }
 .guide { max-width: 880px; line-height: 1.8; }
+.test-hero { border-left: 4px solid var(--gold); background: linear-gradient(135deg,rgba(255,255,255,.98),rgba(240,247,251,.98)); }
+.test-hero h2 { margin-top: 16px; font-size: 1.45rem; }
+.test-hero p { max-width: 850px; line-height: 1.7; color: var(--muted); }
+.test-steps .panel { min-height: 100%; }
 .guide li { margin-bottom: 10px; }
 code { font-size: .83rem; background: #edf2f6; padding: 3px 5px; border-radius: 5px; overflow-wrap: anywhere; }
 .command { white-space: pre-wrap; padding: 15px; display: block; border-left: 3px solid var(--gold); margin: 12px 0; }
