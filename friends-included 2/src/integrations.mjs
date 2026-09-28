@@ -2,11 +2,18 @@ import { createSign, randomUUID } from 'node:crypto';
 import { EMPLOYEES, PROJECTS } from './domain.mjs';
 const SALES_HEADERS = ['Reference','Submission time','Salesperson','Customer','Project','Description','Amount EUR','Proposed Richard %','Proposed Anastasia %','Proposed Jean-Claude %','Approved Richard %','Approved Anastasia %','Approved Jean-Claude %','Richard earned EUR','Anastasia earned EUR','Jean-Claude earned EUR','Commission pool EUR','Status','Source','Decision time'];
 const EXPENSE_HEADERS = ['Reference','Submission time','Reporter','Description','Category','Amount EUR','Proposed allocation','Final allocation','Status','Source','Decision time'];
+const TEST_HEADERS = ['Reference','Submission time','Kind','Test role','Customer','Project','Description','Category','Amount EUR','Proposed Richard %','Proposed Anastasia %','Proposed Jean-Claude %','Approved Richard %','Approved Anastasia %','Approved Jean-Claude %','Commission pool EUR','Proposed allocation','Final allocation','Status','Decision time'];
 export function sheetValues(r) {
   const name = EMPLOYEES.find(e => e.id === r.employee).name;
   return r.kind === 'sale'
     ? [r.reference,r.submitted_at,name,r.customer,PROJECTS[r.project],r.description,r.amount_cents/100,...r.proposed_split.map(v=>v/100),...(r.approved_split?.map(v=>v/100)||['','','']),...r.earned.map(v=>v/100),r.pool/100,r.status,r.source,r.approved_at||'']
     : [r.reference,r.submitted_at,name,r.description,r.category,r.amount_cents/100,PROJECTS[r.proposed_allocation],PROJECTS[r.final_allocation]||'',r.status,r.source,r.approved_at||''];
+}
+export function testSheetValues(r) {
+  const name = EMPLOYEES.find(e => e.id === r.employee)?.name || r.employee;
+  return r.kind === 'sale'
+    ? [r.reference,r.submitted_at,'Sale',name,r.customer,PROJECTS[r.project],r.description,'',r.amount_cents/100,...r.proposed_split.map(v=>v/100),...(r.approved_split?.map(v=>v/100)||['','','']),r.pool/100,'','',r.status,r.approved_at||'']
+    : [r.reference,r.submitted_at,'Expense',name,'','',r.description,r.category,r.amount_cents/100,'','','','','','',0,PROJECTS[r.proposed_allocation],PROJECTS[r.final_allocation]||'',r.status,r.approved_at||''];
 }
 export class TelegramClient {
   constructor(env = process.env, fetcher = fetch) { this.env=env; this.fetcher=fetcher; }
@@ -44,16 +51,16 @@ export class SheetsClient {
   async prepare() {
     if (this.ready) return;
     let sheet=await this.request('?fields=sheets.properties');
-    const requests=['Sales','Expenses'].filter(t=>!sheet.sheets?.some(s=>s.properties.title===t)).map(title=>({addSheet:{properties:{title,gridProperties:{rowCount:1000,columnCount:20,frozenRowCount:1}}}}));
+    const requests=['Sales','Expenses','Public Tests'].filter(t=>!sheet.sheets?.some(s=>s.properties.title===t)).map(title=>({addSheet:{properties:{title,gridProperties:{rowCount:1000,columnCount:20,frozenRowCount:1}}}}));
     if (requests.length) {
       await this.request(':batchUpdate',{requests});
       sheet=await this.request('?fields=sheets.properties');
     }
     const formatting=[];
-    for(const {properties:p} of sheet.sheets.filter(s=>['Sales','Expenses'].includes(s.properties.title))) {
+    for(const {properties:p} of sheet.sheets.filter(s=>['Sales','Expenses','Public Tests'].includes(s.properties.title))) {
       formatting.push({updateSheetProperties:{properties:{sheetId:p.sheetId,gridProperties:{frozenRowCount:1,columnCount:Math.max(p.gridProperties.columnCount,20)}},fields:'gridProperties.frozenRowCount,gridProperties.columnCount'}});
       formatting.push({repeatCell:{range:{sheetId:p.sheetId,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{backgroundColor:{red:0.09,green:0.18,blue:0.27},textFormat:{bold:true,foregroundColor:{red:1,green:1,blue:1}}}},fields:'userEnteredFormat'}});
-      const ranges=p.title==='Sales'?[[6,7],[13,17]]:[[5,6]];
+      const ranges=p.title==='Sales'?[[6,7],[13,17]]:p.title==='Expenses'?[[5,6]]:[[8,9],[15,16]];
       for(const [startColumnIndex,endColumnIndex] of ranges)formatting.push({repeatCell:{range:{sheetId:p.sheetId,startRowIndex:1,startColumnIndex,endColumnIndex},cell:{userEnteredFormat:{numberFormat:{type:'CURRENCY',pattern:'"€"#,##0.00'}}},fields:'userEnteredFormat.numberFormat'}});
     }
     if(formatting.length)await this.request(':batchUpdate',{requests:formatting});
@@ -69,6 +76,14 @@ export class SheetsClient {
     if (target.gridProperties.rowCount<row.row_number || target.gridProperties.columnCount<20) await this.request(':batchUpdate',{requests:[{updateSheetProperties:{properties:{sheetId:target.sheetId,gridProperties:{rowCount:Math.max(target.gridProperties.rowCount,row.row_number+100),columnCount:Math.max(target.gridProperties.columnCount,20)}},fields:'gridProperties.rowCount,gridProperties.columnCount'}}]});
     await this.request('/values:batchUpdate',{valueInputOption:'RAW',data:[{range:`'${tab}'!A1`,values:[tab==='Sales'?SALES_HEADERS:EXPENSE_HEADERS]},{range:`'${tab}'!A${row.row_number}`,values:[sheetValues(row.data)]}]});
   }
+  async syncTest(row) {
+    await this.prepare();
+    const properties=await this.request('?fields=sheets.properties');
+    const target=properties.sheets.find(s=>s.properties.title==='Public Tests').properties;
+    if (target.gridProperties.rowCount<row.row_number) await this.request(':batchUpdate',{requests:[{updateSheetProperties:{properties:{sheetId:target.sheetId,gridProperties:{rowCount:row.row_number+100,columnCount:20}},fields:'gridProperties.rowCount,gridProperties.columnCount'}}]});
+    await this.request('/values:batchUpdate',{valueInputOption:'RAW',data:[{range:"'Public Tests'!A1",values:[TEST_HEADERS]},{range:`'Public Tests'!A${row.row_number}`,values:[testSheetValues(row.data)]}]});
+    return target.sheetId;
+  }
 }
 export async function deliver(store, sheets, telegram, { local=false }={}) {
   if (local) return { local:true, message:'Local preview: external delivery is not connected.' };
@@ -78,8 +93,7 @@ export async function deliver(store, sheets, telegram, { local=false }={}) {
   try {
     for (const row of (await store.pendingRows()).slice(0,2)) {
       if (Date.now()-started>18000) break;
-      if (row.data.test_mode) { await store.syncDone(row.reference,row.version,'Test data'); continue; }
-      try { await sheets.sync(row); await store.syncDone(row.reference,row.version,'Synced'); synced++; }
+      try { row.data.test_mode ? await sheets.syncTest(row) : await sheets.sync(row); await store.syncDone(row.reference,row.version,row.data.test_mode?'Synced to Public Tests':'Synced'); synced++; }
       catch (error) { await store.syncDone(row.reference,row.version,'Sync failed',safeError(error)); failed++; }
     }
     for (const job of await store.pendingNotifications()) {

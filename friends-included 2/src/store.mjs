@@ -34,7 +34,7 @@ export class SupabaseStore {
     for (let i = 0; i < refs.length; i += 50) out.push(...await this.all('fi_notifications', `reference=in.(${refs.slice(i, i + 50).map(encodeURIComponent).join(',')})&order=id.asc`));
     return out;
   }
-  async pendingRows() { return this.request('fi_transactions?select=*&sync_status=neq.Synced&order=sync_attempted_at.asc.nullsfirst,row_number.asc&limit=10'); }
+  async pendingRows() { return this.request('fi_transactions?select=*&sync_status=in.(Sync pending,Sync failed)&order=sync_attempted_at.asc.nullsfirst,row_number.asc&limit=10'); }
   async pendingNotifications() { return this.request('fi_notifications?select=*&status=in.(Pending,Failed)&order=attempted_at.asc.nullsfirst,id.asc&limit=10'); }
   syncDone(ref, version, status, error = null) { return this.rpc('fi_sync_done', { p_ref: ref, p_version: version, p_status: status, p_error: error }); }
   notificationDone(id, status, error = null) { return this.request(`fi_notifications?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ status, error, attempted_at: new Date().toISOString(), sent_at: status === 'Sent' ? new Date().toISOString() : null }) }); }
@@ -60,7 +60,7 @@ export class MemoryStore {
     return structuredClone(row);
   }
   async notifications(refs) { return structuredClone(this.jobs.filter(j => !refs || refs.includes(j.reference))); }
-  async pendingRows() { return structuredClone(this.rows.filter(r => r.sync_status !== 'Synced').slice(0, 10)); }
+  async pendingRows() { return structuredClone(this.rows.filter(r => ['Sync pending', 'Sync failed'].includes(r.sync_status)).slice(0, 10)); }
   async pendingNotifications() { return structuredClone(this.jobs.filter(j => ['Pending', 'Failed'].includes(j.status)).slice(0, 10)); }
   async syncDone(ref, version, status, error = null) { const row = this.rows.find(r => r.reference === ref && r.version === version); if (row) Object.assign(row, { sync_status: status, sync_error: error }); }
   async notificationDone(id, status, error = null) { Object.assign(this.jobs.find(j => j.id === id), { status, error }); }
