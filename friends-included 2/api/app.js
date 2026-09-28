@@ -7,7 +7,8 @@ export default async function handler(req,res) {
     const action=url.searchParams.get('action')||'state';
     if (req.method==='GET' && action==='config') {
       const sheet=process.env.GOOGLE_SHEET_ID?`https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEET_ID}/edit`:'';
-      return json(res,200,{employees:EMPLOYEES.filter(p=>!p.testOnly),local,author:process.env.PUBLIC_AUTHOR_NAME||'Maksims Paņuškins',botUsername:process.env.PUBLIC_BOT_USERNAME||'',github:process.env.PUBLIC_GITHUB_URL||'',sheet,testSheet:sheet,configured:local||Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY)});
+      const testSheet=sheet?`${sheet}?gid=${process.env.PUBLIC_TEST_SHEET_GID||'1692091799'}#gid=${process.env.PUBLIC_TEST_SHEET_GID||'1692091799'}`:'';
+      return json(res,200,{employees:EMPLOYEES.filter(p=>!p.testOnly),local,author:process.env.PUBLIC_AUTHOR_NAME||'Maksims Paņuškins',botUsername:process.env.PUBLIC_BOT_USERNAME||'',github:process.env.PUBLIC_GITHUB_URL||'',sheet,testSheet,configured:local||Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY)});
     }
     // Deliberate public fictional demonstration roles, as required by the brief.
     // This is not authentication for a real company's financial records.
